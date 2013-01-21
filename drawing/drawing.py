@@ -1,14 +1,30 @@
 ################################################################################
-# Copyright (C) 2012-2013 Leap Motion, Inc. All rights reserved.               #
-# Leap Motion proprietary and confidential. Not for distribution.              #
-# Use subject to the terms of the Leap Motion SDK Agreement available at       #
-# https://developer.leapmotion.com/sdk_agreement, or another agreement         #
-# between Leap Motion and you, your company or other organization.             #
+# Copyright Rob and Mark McColl 2012
+# This source code is available under the terms of the 3-part BSD Open Source
+# license. http://opensource.org/licenses/BSD-3-Clause
 ################################################################################
 
 import Leap, sys, wx
 
-DEBUG_VERBOSE = False
+class ScaledVector(Leap.Vector):
+    def __init__(self, init, scale, in_min, in_max):
+        Leap.Vector.__init__(self, init)
+        self.scale = scale
+        self.in_min = in_min
+        self.in_max = in_max
+        self.in_range = in_max - in_min
+
+    def interpolate(self, val, scale, in_max, in_min, in_range):
+        if(val > max(in_max,in_min)):
+            return scale
+        elif(val < min(in_min,in_max)):
+            return 0
+        else:
+            return scale * ((val - in_min) / in_range)
+    def set(self, val):
+        self.x = self.interpolate(val.x, self.scale.x, self.in_max.x, self.in_min.x, self.in_range.x)
+        self.y = self.interpolate(val.y, self.scale.y, self.in_max.y, self.in_min.y, self.in_range.y)
+        self.z = self.interpolate(val.z, self.scale.z, self.in_max.z, self.in_min.z, self.in_range.z)
 
 class OneFinger(Leap.Listener):
     def __init__(self, location):
@@ -20,50 +36,46 @@ class OneFinger(Leap.Listener):
         if not frame.hands.empty and not frame.hands[0].fingers.empty:
             fingers = frame.hands[0].fingers
             if len(fingers) == 1:
-                self.location.set_location(fingers[0].tip_position[0],
-                                           fingers[0].tip_position[1],
-                                           fingers[0].tip_position[2])
-            
+                self.location.set_location(fingers[0].tip_position)
 
-class Location:
-    def __init__(self, panel):
-        self.loc = Leap.Vector(200,100,-200)
-        self.x = 200
-        self.y = 100
-        self.z = -200
-        self.bmp = wx.EmptyBitmap(1000,800)
+class LocationPainter:
+    def __init__(self, panel, scaledvec):
+        self.loc = scaledvec
+        self.on = self.loc.scale.z * 0.5
+        self.bmp = wx.EmptyBitmap(self.loc.scale.x, self.loc.scale.y)
         self.dc = wx.MemoryDC()
         self.dc.SelectObject(self.bmp)
         self.panel = panel
 
-    def set_location(self, x,y,z):
-        if DEBUG_VERBOSE:
-            print "set_loc: %d,%d, %d)" % (x, y, z)
-        self.x = x*3 + 500
-        self.y = 1270 - y*3
-        self.z = - z - 30
+    def set_location(self, new_loc):
+        self.loc.set(new_loc)
         self.panel.Refresh()
 
     def paint_location(self, event):
         dc = wx.PaintDC(event.GetEventObject())
-        dc.Blit(0,0,1000,800,self.dc,0,0,wx.COPY)
-        if(self.z < 0):
-            if(self.z > -150):
-                dc.SetPen(wx.Pen("RED", self.z))
-                dc.DrawLine(self.x,self.y, self.x, self.y)
+        dc.Blit(0,0,self.loc.scale.x, self.loc.scale.y,self.dc,0,0,wx.COPY)
+        if(self.loc.z > self.on):
+            dc.SetPen(wx.Pen("RED", self.loc.z - self.on + 10))
+            dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
         else:
             self.dc.SetPen(wx.Pen("BLUE", 10))
-            self.dc.DrawLine(self.x,self.y, self.x, self.y)
+            self.dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
 
 def main():
+    init_pos = Leap.Vector(500, 400, 0)
+    img_size = Leap.Vector(1000, 800, 100)
+    phys_min = Leap.Vector(-90, 360, -180)
+    phys_max = Leap.Vector(130, 130, 60)
+    scaled_vec = ScaledVector(init_pos, img_size, phys_min, phys_max)
+    
     # Create the wxApp and frame
     app = wx.App(False)
     frame = wx.Frame(None, title = "Drawing")
-    frame.SetSizeWH(1000,800)
+    frame.SetSizeWH(img_size.x, img_size.y)
     panel = wx.Panel(frame)
     panel.SetDoubleBuffered(True)
     
-    loc = Location(panel)
+    loc = LocationPainter(panel, scaled_vec)
     panel.Bind(wx.EVT_PAINT, loc.paint_location)
     
     # Create a sample listener and controller
@@ -79,7 +91,6 @@ def main():
     
     # Remove the sample listener when done
     controller.remove_listener(listener)
-
 
 if __name__ == "__main__":
     main()
