@@ -40,7 +40,9 @@ class OneFinger(Leap.Listener):
         frame = controller.frame()
         if not frame.hands.empty and not frame.hands[0].fingers.empty:
             fingers = frame.hands[0].fingers
-            self.location.set_location(fingers[0].tip_position, len(fingers) == 1)
+            two_hands = len(frame.hands) == 2
+            eight_fingers = two_hands and ((len(frame.hands[0].fingers) + len(frame.hands[1].fingers)) == 8)
+            self.location.set_location(fingers[0].tip_position, two_hands, eight_fingers)
 
 class LocationPainter:
     def __init__(self, panel, scaledvec):
@@ -51,17 +53,34 @@ class LocationPainter:
         self.dc = wx.MemoryDC()
         self.dc.SelectObject(self.bmp)
         self.panel = panel
+        self.erase = True
+        self.full_erase = False
 
-    def set_location(self, new_loc, erase):
+    def set_location(self, new_loc, erase, full_erase):
         self.loc.set(new_loc)
+        self.erase = erase
+        self.full_erase = full_erase
         self.panel.Refresh()
 
     def paint_location(self, event):
         dc = wx.PaintDC(event.GetEventObject())
         dc.Blit(0,0,self.loc.scale.x, self.loc.scale.y,self.dc,0,0,wx.COPY)
-        if(self.loc.z > self.on):
+        if(self.full_erase):
+            x = self.loc.scale.x
+            y = self.loc.scale.y
+            points = [wx.Point(0,0), wx.Point(x,0), wx.Point(x,y), wx.Point(0,y)]
+            self.dc.SetBrush(wx.Brush("BLACK"))
+            self.dc.SetPen(wx.Pen("BLACK", 10))
+            self.dc.DrawPolygon(points)
+        elif(self.loc.z > self.on):
             dc.SetPen(wx.Pen("RED", self.loc.z - self.on + 10))
             dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
+        elif(self.erase):
+            size = (self.on - self.loc.z) / 1.2 + 10
+            dc.SetPen(wx.Pen("WHITE", size))
+            dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
+            self.dc.SetPen(wx.Pen("BLACK", size))
+            self.dc.DrawLine(self.prev.x,self.prev.y, self.loc.x, self.loc.y)
         else:
             self.dc.SetPen(wx.Pen("BLUE", 10))
             self.dc.DrawLine(self.prev.x,self.prev.y, self.loc.x, self.loc.y)
