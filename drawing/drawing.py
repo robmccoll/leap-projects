@@ -75,6 +75,11 @@ class LocationPainter:
         elif(self.loc.z > self.on):
             dc.SetPen(wx.Pen("RED", self.loc.z - self.on + 10))
             dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
+            if(self.erase):
+                dc.SetPen(wx.Pen("WHITE", 10))
+            else:
+                dc.SetPen(wx.Pen("BLUE", 10))
+            dc.DrawLine(self.loc.x,self.loc.y, self.loc.x, self.loc.y)
         elif(self.erase):
             size = (self.on - self.loc.z) / 1.2 + 10
             dc.SetPen(wx.Pen("WHITE", size))
